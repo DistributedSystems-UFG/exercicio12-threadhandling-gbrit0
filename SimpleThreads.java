@@ -28,11 +28,40 @@ public class SimpleThreads {
         }
     }
 
+    private static class CpuIntensiveTask
+        implements Runnable {
+        public void run() {
+            long iterations = 0;
+            double accumulator = 0.0;
+
+            try {
+                while (true) {
+                    for (int i = 0; i < 1_000_000; i++) {
+                        accumulator += Math.sqrt(i) * Math.sin(i);
+                    }
+                    iterations++;
+
+                    if (iterations % 5 == 0) {
+                        threadMessage("CPU task iterations: " + iterations);
+                    }
+
+                    if (Thread.currentThread().isInterrupted()) {
+                        throw new InterruptedException();
+                    }
+                }
+            } catch (InterruptedException e) {
+                threadMessage("CPU task interrupted after " + iterations + " iterations. Result=" + accumulator);
+            }
+        }
+    }
+
+    
+
     public static void main(String args[])
         throws InterruptedException {
 
         // Delay, in milliseconds before we interrupt MessageLoop thread (default one hour)
-        long patience = 1000 * 60 * 60;
+        long patience = 1000 * 60 * 60 ;
 
         // If command line argument present, gives patience in seconds
         if (args.length > 0) {
@@ -44,7 +73,7 @@ public class SimpleThreads {
             }
         }
 
-        threadMessage("Starting MessageLoop thread");
+    threadMessage("Starting MessageLoop thread");
         long startTime = System.currentTimeMillis();
         Thread t = new Thread(new MessageLoop());
 
@@ -67,5 +96,21 @@ public class SimpleThreads {
             }
         }
         threadMessage("Finally!");
+
+        long cpuTimeLimitMs = Math.min(patience, 10_000);
+        threadMessage("Starting CPU-intensive thread (limit " + cpuTimeLimitMs + " ms)");
+        long cpuStartTime = System.currentTimeMillis();
+        Thread cpuThread = new Thread(new CpuIntensiveTask());
+        cpuThread.start();
+
+        while (cpuThread.isAlive()) {
+            cpuThread.join(500);
+            if (((System.currentTimeMillis() - cpuStartTime) > cpuTimeLimitMs) && cpuThread.isAlive()) {
+                threadMessage("Time limit exceeded for CPU task. Interrupting...");
+                cpuThread.interrupt();
+                cpuThread.join();
+            }
+        }
+        threadMessage("CPU-intensive task finished.");
     }
 }
